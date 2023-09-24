@@ -75,12 +75,13 @@ module.exports.book_appointment = async function (req, res) {
     try {
 
         let slot = await Slot.findById(req.body.slot);
-        console.log('Slot: ', slot);
-        slot.patient = req.user._id;
+        let patient = await Patient.findOne({ user: req.user._id });
+        console.log('User: ', patient);
+        slot.patients = patient._id;
         slot.is_booked = true;
         slot.save();
+        console.log('Slot: ', slot);
 
-        let patient = await Patient.findOne({ user: req.user._id });
         patient.appointments.push(slot._id);
         patient.save();
 
@@ -102,15 +103,44 @@ module.exports.book_appointment = async function (req, res) {
 // View Appointments
 module.exports.view_appointments = async function (req, res) {
 
-    let patient = await Patient.findOne({ user: req.user._id }).populate({
-        path: 'appointments',
-        populate: {
-            path: 'patient'
-        }
-    }).exec();
+    let patient = await Patient.findOne({ user: req.user._id }).populate('appointments').exec();
+
+    let appointments = patient.appointments;
 
     return res.render('view_appointment', {
         title: "Appointments | MediAssist",
-        patient: patient
+        patient: patient,
+        appointments: appointments
     });
+}
+
+// View All Appointments
+module.exports.doctor_view = async function (req, res) {
+    let slots = await Slot.find({ is_booked: true })
+                .populate('patients')
+                .exec();
+
+    console.log(slots);
+
+    return res.render('doctor_view', {
+        title: "Appointments | MediAssist",
+        slots: slots
+    });
+}
+
+// Cancel Appointment
+module.exports.cancel_appointment = async function (req, res) {
+
+    let slot = await Slot.findById(req.params.id);
+    slot.is_booked = false;
+    slot.patient = undefined;
+    slot.save();
+
+    let patient = await Patient.findOne({ user: req.user._id });
+    patient.appointments.pull(req.params.id);
+    patient.save();
+
+    req.flash('success', 'Appointment cancelled successfully!');
+    return res.redirect('back');
+
 }
